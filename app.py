@@ -23,30 +23,38 @@ REDIRECT_APP_URL = "https://redirect1x.streamlit.app"
 
 st.title("🎥 YouTube Live Streaming Platform")
 
-# Cek apakah ada token yang dikirim dari redirect app
-if 'tokens' in st.query_params:
+# CEK TOKENS HANYA SEKALI - SIMPAN STATUS DI SESSION
+if 'token_processed' not in st.session_state:
+    st.session_state['token_processed'] = False
+
+# Proses tokens hanya jika belum diproses
+if 'tokens' in st.query_params and not st.session_state['token_processed']:
     tokens_json = st.query_params['tokens']
     try:
         # Decode dan parse tokens
         decoded_tokens = urllib.parse.unquote(tokens_json)
         tokens = json.loads(decoded_tokens)
         st.session_state['youtube_tokens'] = tokens
+        st.session_state['token_processed'] = True  # TANDAI SUDAH DIPROSES
         st.success("✅ Successfully connected to YouTube!")
         
-        # HAPUS parameter tokens dari URL untuk mencegah loop
+        # HAPUS parameter tokens dari URL IMMEDIATELY
         st.query_params.clear()
         
-        # Refresh halaman untuk membersihkan URL
+        # Refresh halaman sekali saja
         st.components.v1.html("""
             <script>
-                setTimeout(function() {
-                    window.location.href = window.location.pathname;
-                }, 2000);
+                // Hapus parameter dan refresh
+                if (window.location.search.includes('tokens')) {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    window.location.reload();
+                }
             </script>
         """, height=0)
         
     except Exception as e:
         st.error(f"❌ Failed to process token: {str(e)}")
+        st.session_state['token_processed'] = True  # Tetap tandai sudah diproses
 
 # Tampilkan tombol auth jika belum terautentikasi
 if 'youtube_tokens' not in st.session_state:
@@ -70,6 +78,11 @@ if 'youtube_tokens' not in st.session_state:
         if user_url:
             user_url = user_url.replace('https://', '').replace('http://', '').split('/')[0]
             current_app_url = f"https://{user_url}"
+            st.session_state['manual_url'] = current_app_url
+    
+    # Gunakan URL manual jika tersedia
+    if 'manual_url' in st.session_state:
+        current_app_url = st.session_state['manual_url']
     
     if current_app_url:
         # Bersihkan URL
@@ -107,13 +120,13 @@ if 'youtube_tokens' not in st.session_state:
 else:
     st.success("✅ Already authenticated!")
     
-    # Tampilkan token info (untuk debugging)
-    with st.expander("🔧 Token Info"):
-        st.json(st.session_state['youtube_tokens'])
+    # Tampilkan info dasar (tidak semua token untuk keamanan)
+    if 'youtube_tokens' in st.session_state:
+        st.write("Access token available")
     
     if st.button("🔄 Logout"):
-        # Hapus session state
-        keys_to_delete = ['youtube_tokens']
+        # Reset semua session state
+        keys_to_delete = ['youtube_tokens', 'token_processed', 'manual_url']
         for key in keys_to_delete:
             if key in st.session_state:
                 del st.session_state[key]
@@ -125,3 +138,8 @@ else:
 st.markdown("---")
 st.header("📺 Streaming Content")
 st.write("YouTube Live Streaming platform is ready!")
+
+# Debug section (opsional)
+with st.expander("🔧 Debug Info"):
+    st.write("Session keys:", list(st.session_state.keys()))
+    st.write("Query params:", dict(st.query_params))
