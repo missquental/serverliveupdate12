@@ -19,7 +19,6 @@ PREDEFINED_OAUTH_CONFIG = {
     }
 }
 
-# URL aplikasi redirect 
 REDIRECT_APP_URL = "https://redirect1x.streamlit.app"
 
 st.title("🎥 YouTube Live Streaming Platform")
@@ -31,7 +30,9 @@ if 'tokens' in st.query_params:
         tokens = json.loads(urllib.parse.unquote(tokens_json))
         st.session_state['youtube_tokens'] = tokens
         st.success("✅ Berhasil terhubung ke YouTube!")
-        st.query_params.clear()  # Bersihkan URL
+        # Hapus parameter tokens dari URL
+        st.query_params.clear()
+        st.rerun()  # Refresh untuk membersihkan URL
     except Exception as e:
         st.error(f"❌ Gagal memproses token: {str(e)}")
 
@@ -39,46 +40,36 @@ if 'tokens' in st.query_params:
 if 'youtube_tokens' not in st.session_state:
     st.subheader("🔐 Autentikasi YouTube")
     
-    # Dapatkan URL aplikasi saat ini secara otomatis
+    # Dapatkan URL aplikasi saat ini
     try:
-        # Method 1: Gunakan context dari Streamlit
         import os
         host = os.environ.get('HOST', '')
         if host:
             current_app_url = f"https://{host}"
         else:
-            # Fallback: gunakan URL saat ini dari headers jika tersedia
             current_app_url = f"https://{st.context.headers.get('Host', '')}" if hasattr(st, 'context') and hasattr(st.context, 'headers') else ''
     except:
         current_app_url = ''
     
-    # Method 2: Session state (user input sebelumnya)
-    if not current_app_url and 'user_app_url' in st.session_state:
-        current_app_url = st.session_state['user_app_url']
-    
-    # Method 3: Input manual
+    # Method fallback: input manual
     if not current_app_url:
-        st.warning("📝 Tidak dapat mendeteksi URL aplikasi secara otomatis")
         user_url = st.text_input("Masukkan URL aplikasi ini", 
                                placeholder="serverliveupdate12.streamlit.app",
-                               help="Contoh: serverliveupdate12.streamlit.app (tanpa https://)")
+                               help="Contoh: serverliveupdate12.streamlit.app")
         if user_url:
-            # Bersihkan URL jika mengandung https/http
             user_url = user_url.replace('https://', '').replace('http://', '').split('/')[0]
             current_app_url = f"https://{user_url}"
-            st.session_state['user_app_url'] = current_app_url
     
     if current_app_url:
-        # Bersihkan URL dari protokol dan path
-        clean_url = current_app_url.replace('https://', '').replace('http://', '').split('/')[0]
-        current_app_url = f"https://{clean_url}"
+        # Bersihkan URL
+        clean_host = current_app_url.replace('https://', '').replace('http://', '').split('/')[0]
+        current_app_url = f"https://{clean_host}"
         
-        st.info(f"URL aplikasi terdeteksi: {current_app_url}")
+        st.info(f"URL aplikasi: {current_app_url}")
         
-        # Gunakan parameter state untuk membawa informasi referer
-        # Google OAuth mengizinkan parameter state
+        # Gunakan parameter state untuk membawa URL aplikasi
         scopes = ['https://www.googleapis.com/auth/youtube.force-ssl']
-        encoded_state = urllib.parse.quote(current_app_url)  # Encode URL untuk state
+        encoded_state = urllib.parse.quote(current_app_url)
         
         auth_url = (
             f"{PREDEFINED_OAUTH_CONFIG['web']['auth_uri']}?"
@@ -88,33 +79,36 @@ if 'youtube_tokens' not in st.session_state:
             f"response_type=code&"
             f"access_type=offline&"
             f"prompt=consent&"
-            f"state={encoded_state}"  # Kirim URL aplikasi via state parameter
+            f"state={encoded_state}"
         )
         
         st.markdown(f"""
         ### Langkah Autentikasi:
-        1. Klik tombol di bawah untuk membuka halaman otorisasi
+        1. Klik tombol di bawah untuk otorisasi
         2. Login ke akun YouTube Anda  
-        3. Izinkan akses ke aplikasi
-        4. Anda akan dialihkan ke aplikasi redirect
-        5. Token akan dikirim kembali ke sini secara otomatis
+        3. Izinkan akses aplikasi
+        4. Anda akan otomatis kembali ke sini
         
-        [🔐 Klik untuk Otorisasi YouTube]({auth_url})
+        [🔐 Otorisasi YouTube]({auth_url})
         """)
-        
-        st.info("Setelah otorisasi selesai, Anda akan otomatis kembali ke halaman ini dengan token yang sudah diproses.")
     else:
-        st.warning("📝 Masukkan URL aplikasi Anda untuk melanjutkan proses autentikasi")
+        st.warning("📝 Masukkan URL aplikasi Anda")
 else:
     st.success("✅ Sudah terautentikasi!")
     
+    # Tampilkan info token untuk debugging
+    with st.expander("🔧 Token Info"):
+        st.json(st.session_state['youtube_tokens'])
+    
     if st.button("🔄 Logout"):
-        for key in ['youtube_tokens', 'user_app_url']:
+        keys_to_delete = ['youtube_tokens']
+        for key in keys_to_delete:
             if key in st.session_state:
                 del st.session_state[key]
+        st.query_params.clear()
         st.rerun()
 
-# Konten utama aplikasi
+# Konten utama
 st.markdown("---")
 st.header("📺 Konten Streaming")
-st.write("Aplikasi streaming YouTube Live siap digunakan!")
+st.write("Platform streaming YouTube Live siap digunakan!")
